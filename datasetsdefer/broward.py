@@ -12,6 +12,7 @@ sys.path.append("../")
 import zipfile
 import requests
 from .basedataset import BaseDataset
+from .human import *
 
 
 class BrowardDataset(BaseDataset):
@@ -73,14 +74,27 @@ class BrowardDataset(BaseDataset):
             row = mturk_data.iloc[i]
             # only keep the columns that are not nan
             row = row[row.notna()]
-            # get a random prediction
-            random_sample = row.sample(n=1).values[0]
-            most_common = row.value_counts().idxmax()
-            # can choose either here
-            if most_common == 1:
-                human_predictions.append(train_y[i - 1])
-            else:
-                human_predictions.append(1 - train_y[i - 1])
+            # # way1: choose a random human
+            # random_sample = row.sample(n=1).values[0]
+            # most_common = row.value_counts().idxmax()
+
+            # # way2: choosing correct label based on number of correct humans
+            # if most_common == 1:
+            #     human_predictions.append(train_y[i - 1])
+            # else:
+            #     human_predictions.append(1 - train_y[i - 1])
+
+            # way3: choose label with probabilities
+            label_counts = row.value_counts()
+            total_votes = sum(label_counts)
+            prob_correct = label_counts.get(1, 0) / total_votes  # P(correct) = ratio of '1' votes
+            prob_wrong = 1 - prob_correct  # P(wrong) = remaining probability
+            # Sample the label based on probability
+            sampled_label = np.random.choice(
+                [train_y[i-1], 1 - train_y[i-1]],  # Options: correct or flipped
+                p=[prob_correct, prob_wrong]   # Probabilities
+            )
+            human_predictions.append(sampled_label)
 
         human_predictions = torch.tensor(human_predictions)
         train_y = torch.tensor(train_y)

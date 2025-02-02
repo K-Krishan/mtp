@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from .basedataset import BaseDataset
+from .human import *
 
 import re
 
