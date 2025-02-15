@@ -14,6 +14,28 @@ import requests
 from .basedataset import BaseDataset
 from .human import *
 
+def synth(y, d, synth=[0.8,0.6]):
+    h = []
+    for i in range(len(y)):
+        if np.random.rand() < synth[d[i]]:
+            h.append(y[i])
+        else:
+            h.append(1-y[i]) # change it to consider label set later
+    return np.array(h)
+
+def biased_synth_multiple_demographics(y, d, sensitive_label, accuracy=0.8, odds_diff=0.2):
+    demographic_count = np.max(d)+1 # assuming 0 to d
+    probs = []
+    if odds_diff == 0:
+        for i in range(demographic_count):
+            probs.append(accuracy)
+    else:
+        for i in range(demographic_count):
+            if i == sensitive_label:
+                probs.append(accuracy - odds_diff*(demographic_count-1)/demographic_count)
+            else:
+                probs.append(accuracy + odds_diff/demographic_count)
+    return synth(y, d, synth=probs)
 
 class BrowardDataset(BaseDataset):
     """Compas dataset with human judgements for 1000 points"""
@@ -67,36 +89,38 @@ class BrowardDataset(BaseDataset):
         scaler.fit(train_x)
         train_x = scaler.transform(train_x)
 
-        human_predictions = []
-        mturk_data = mturk_data.drop(["mTurk_code"], axis=1)
-        for i in range(1, len(mturk_data)):
-            # get all columns
-            row = mturk_data.iloc[i]
-            # only keep the columns that are not nan
-            row = row[row.notna()]
-            # # way1: choose a random human
-            # random_sample = row.sample(n=1).values[0]
-            # most_common = row.value_counts().idxmax()
+        # human_predictions = []
+        # mturk_data = mturk_data.drop(["mTurk_code"], axis=1)
+        # for i in range(1, len(mturk_data)):
+        #     # get all columns
+        #     row = mturk_data.iloc[i]
+        #     # only keep the columns that are not nan
+        #     row = row[row.notna()]
+        #     # # way1: choose a random human
+        #     # random_sample = row.sample(n=1).values[0]
+        #     # most_common = row.value_counts().idxmax()
 
-            # # way2: choosing correct label based on number of correct humans
-            # if most_common == 1:
-            #     human_predictions.append(train_y[i - 1])
-            # else:
-            #     human_predictions.append(1 - train_y[i - 1])
+        #     # # way2: choosing correct label based on number of correct humans
+        #     # if most_common == 1:
+        #     #     human_predictions.append(train_y[i - 1])
+        #     # else:
+        #     #     human_predictions.append(1 - train_y[i - 1])
 
-            # way3: choose label with probabilities
-            label_counts = row.value_counts()
-            total_votes = sum(label_counts)
-            prob_correct = label_counts.get(1, 0) / total_votes  # P(correct) = ratio of '1' votes
-            prob_wrong = 1 - prob_correct  # P(wrong) = remaining probability
-            # Sample the label based on probability
-            sampled_label = np.random.choice(
-                [train_y[i-1], 1 - train_y[i-1]],  # Options: correct or flipped
-                p=[prob_correct, prob_wrong]   # Probabilities
-            )
-            human_predictions.append(sampled_label)
+        #     # way3: choose label with probabilities
+        #     label_counts = row.value_counts()
+        #     total_votes = sum(label_counts)
+        #     prob_correct = label_counts.get(1, 0) / total_votes  # P(correct) = ratio of '1' votes
+        #     prob_wrong = 1 - prob_correct  # P(wrong) = remaining probability
+        #     # Sample the label based on probability
+        #     sampled_label = np.random.choice(
+        #         [train_y[i-1], 1 - train_y[i-1]],  # Options: correct or flipped
+        #         p=[prob_correct, prob_wrong]   # Probabilities
+        #     )
+        #     human_predictions.append(sampled_label)
 
-        human_predictions = torch.tensor(human_predictions)
+        # human_predictions = torch.tensor(human_predictions)
+        human_predictions = torch.tensor(biased_synth_multiple_demographics(train_y, demographics, 2, 0.7, 0.2))
+
         train_y = torch.tensor(train_y)
         demographics = torch.from_numpy(demographics).int()
         train_x = torch.from_numpy(train_x).float()

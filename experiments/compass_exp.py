@@ -51,7 +51,7 @@ def main():
     optimizer = optim.AdamW
     scheduler = None
     lr = 0.01
-    max_trials = 5
+    max_trials = 10
     total_epochs = 500# 100
     stats_combination_cost = []
     stats_combination_all = []

@@ -231,29 +231,29 @@ class HateSpeech(BaseDataset):
         hatespeech_data["label_distribution"] = distribution_over_labels
 
         # change the distribution here if i need
+        human_prediction = exact_fair_hatespeech(hatespeech_data["class"])
+        # human_prediction = []
+        # if self.expert_type == "synthetic":
+        #     for i in range(len(hatespeech_data)):
+        #         if hatespeech_data.iloc[i]["demographics"] == 0:
+        #             correct_human = np.random.choice(
+        #                 [0, 1], p=[1 - self.synth_exp_param[0], self.synth_exp_param[0]]
+        #             )
 
-        human_prediction = []
-        if self.expert_type == "synthetic":
-            for i in range(len(hatespeech_data)):
-                if hatespeech_data.iloc[i]["demographics"] == 0:
-                    correct_human = np.random.choice(
-                        [0, 1], p=[1 - self.synth_exp_param[0], self.synth_exp_param[0]]
-                    )
-
-                else:
-                    correct_human = np.random.choice(
-                        [0, 1], p=[1 - self.synth_exp_param[1], self.synth_exp_param[1]]
-                    )
-                if correct_human:
-                    human_prediction.append(hatespeech_data.iloc[i]["class"])
-                else:
-                    human_prediction.append(np.random.choice([0, 1, 2]))
-        else:
-            for i in range(len(hatespeech_data)):
-                # sample from label distribution
-                label_distribution = hatespeech_data.iloc[i]["label_distribution"]
-                label = np.random.choice([0, 1, 2], p=label_distribution)
-                human_prediction.append(label)
+        #         else:
+        #             correct_human = np.random.choice(
+        #                 [0, 1], p=[1 - self.synth_exp_param[1], self.synth_exp_param[1]]
+        #             )
+        #         if correct_human:
+        #             human_prediction.append(hatespeech_data.iloc[i]["class"])
+        #         else:
+        #             human_prediction.append(np.random.choice([0, 1, 2]))
+        # else:
+        #     for i in range(len(hatespeech_data)):
+        #         # sample from label distribution
+        #         label_distribution = hatespeech_data.iloc[i]["label_distribution"]
+        #         label = np.random.choice([0, 1, 2], p=label_distribution)
+        #         human_prediction.append(label)
 
         hatespeech_data["human_prediction"] = human_prediction
 
