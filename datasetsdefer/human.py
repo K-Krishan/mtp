@@ -149,9 +149,9 @@ def make_biased_humans_multiclass(y, d, accuracy=0.8, odds_diff=0.2):
 
 def exact_fair_hatespeech(y):
     probs = np.array(
-        [[0.4, 0.3, 0.3],
-        [0.3, 0.4, 0.3],
-        [0.3, 0.3, 0.4]]
+        [[0.8, 0.1, 0.1],
+        [0.1, 0.8, 0.1],
+        [0.1, 0.1, 0.8]]
     )
     h = []
     for true_label in y:

@@ -1,22 +1,20 @@
 import logging
 import os
-import pickle
 import sys
+
+sys.path.append("../")
 import torch
-import argparse
 import datetime
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
-from datasetsdefer.adult import *
+
+from datasetsdefer.AdultDataset import *
 from methods.costcombination import *
 from methods.combination import *
+from networks.linear_net import *
 
 import torch.optim as optim
-
-sys.path.append("../")
-
-
 import fairlearn.metrics as metrics
 
 logging.basicConfig(level=logging.DEBUG)
@@ -116,7 +114,10 @@ def main():
     date_now = date_now.strftime("%Y-%m-%d_%H%M%S")
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    
+    optimizer = optim.Adam
+    scheduler = None
+    lr = 1e-2
+
     data_dir = '../data'
     
     max_trials = 5
@@ -125,18 +126,20 @@ def main():
     stats_combination_cost = []
     stats_combination_all = []
     for trial in range(max_trials):
-        dataset = Adult(data_dir, True, False, 'random_annotator', device)
 
-        model = GradientBoostingClassifier()
+        dataset = Adult(data_dir, device)
+
+        # model = GradientBoostingClassifier()
+        model = LinearNet(dataset.d,3).to(device)
         PLC = PL_Combine_Cost(model, device)
         PLC.fit(
             dataset.data_train_loader,
             dataset.data_val_loader,
             dataset.data_test_loader,
             epochs=total_epochs,
-            optimizer=None,
-            scheduler=None,
-            lr=None,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
             verbose=False,
             test_interval=5,
         )
@@ -144,16 +147,17 @@ def main():
         print('\n\nFairness Metrics for cost optimized combination: ')
         stats_combination_cost.append(print_metrics(output, class_num=2, combine_method="PL"))
 
-        model = GradientBoostingClassifier()
+        # model = GradientBoostingClassifier()
+        model = LinearNet(dataset.d,3).to(device)
         PLC = PL_Combine(model, device)
         PLC.fit(
             dataset.data_train_loader,
             dataset.data_val_loader,
             dataset.data_test_loader,
             epochs=total_epochs,
-            optimizer=None,
-            scheduler=None,
-            lr=None,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
             verbose=False,
             test_interval=5,
         )

@@ -2,20 +2,24 @@ import torch
 import os
 import random
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from torch.utils.data import random_split, TensorDataset, DataLoader
 
-import logging
+# import loggingc
 
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as pyplot
+# import numpy as np
+# import matplotlib.pyplot as pyplot
+
+from .basedataset import *
+import sys
 
 sys.path.append("../")
 
 from .human import *
 
-class AdultDataset(BaseDataset):
+class Adult(BaseDataset):
     """Adult dataset with Synthetic Humans"""
-    def __init__(self, data_dir, test_split=0.2, val_split=0.1, batch_size=1000):
+    def __init__(self, data_dir, device, test_split=0.2, val_split=0.1, batch_size=1000):
         """https://www.kaggle.com/datasets/uciml/adult-census-income"""
         self.data_dir = data_dir
         self.test_split = test_split
@@ -23,13 +27,16 @@ class AdultDataset(BaseDataset):
         self.batch_size = batch_size
         self.n_dataset = 2
         self.train_split = 1 - test_split - val_split
+        self.device = device
         self.generate_data()
     def generate_data(self):
 
         self.random_seed = 42 # change here for ensuring consistency (TODO: add it in __init__ callable during instance creation)
 
-        adult_data = pd.read_csv(self.data_dir + "/adult.csv")
-        df = df.drop(['educational-num', 'capital-gain', 'capital-loss'], axis=1)
+        # df = pd.read_csv(self.data_dir + "/adult.csv")
+        df = pd.read_csv(self.data_dir + "/adult_reconstruction.csv")
+        df = df.drop(['capital-gain', 'capital-loss'], axis=1)
+        # df = df.drop(['educational-num', 'capital-gain', 'capital-loss'], axis=1)
 
         label_encoder = LabelEncoder()
         standard_scaler = StandardScaler()
@@ -52,8 +59,10 @@ class AdultDataset(BaseDataset):
 
         # X_train = st.fit_transform(X_train)
         # X_test = st.transform(X_test)
-        
+
+        t1, t2 = 25_000, 60_000 #28428.48963703, 64663.35819187 are cluster thresholds according to K-means
         y = df['income'].to_numpy()
+        y = np.where(y < t1, 0, np.where(y < t2, 1, 2))
         X = df.drop(['income', 'gender'], axis=1).to_numpy()  # can remove gender if I wanna include it as a feature in dataset
         demographics = df['gender'].to_numpy()
 
@@ -64,7 +73,9 @@ class AdultDataset(BaseDataset):
         X = torch.tensor(X, dtype=torch.float32)
         y = torch.tensor(y, dtype=torch.int64)
         demographics = torch.tensor(demographics, dtype=torch.int64)
-        expert = make_biased_humans(y, demographics, accuracy=0.8, odds_diff=0) # change it to consider label set later
+        # expert = torch.tensor(make_biased_humans(y, demographics, accuracy=0.8, odds_diff=0)) # change it to consider label set later
+        expert = torch.tensor(exact_fair_hatespeech(y))
+        self.d = X.shape[1]
 
         # Split data
         total_samples = len(X)

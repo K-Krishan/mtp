@@ -11,6 +11,7 @@ import numpy as np
 from torch import nn, optim
 from torch.nn.functional import softmax
 from sklearn.cluster import KMeans
+
 class TSCalibrator():
     """ Maximum likelihood temperature scaling (Guo et al., 2017)
     """

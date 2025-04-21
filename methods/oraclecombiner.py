@@ -227,10 +227,10 @@ class OracleCombiner:
             'Combined accuracy': (human_correct + model_correct) / n_samples,
             'Human correct': human_correct,
             'Human refered': human_refered,
-            'Human accuracy': human_correct / human_refered,
+            'Human accuracy': human_correct / human_refered if human_refered>0 else 0,
             'Model correct': model_correct,
             'Model refered': model_refered,
-            'Model accuracy': model_correct / model_refered,
+            'Model accuracy': model_correct / model_refered if model_refered > 0 else 0,
             'Model cost': miss_cost * (model_refered - model_correct) + human_cost * human_refered
         }
 

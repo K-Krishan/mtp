@@ -47,7 +47,7 @@ from methods.seperate_thresholds import *
 
 from methods.costcombination import *
 from methods.combination import *
-
+from methods.faircomb import *
 # from networks.cnn import *
 # from networks.cnn import DenseNet121_CE, NetSimple, WideResNet
 
@@ -150,6 +150,26 @@ def summarize_metrics(trial_results):
         # print(f"  Mean: {stats['mean']}")
         # print(f"  Variance: {stats['variance']}")
 
+
+import pandas as pd
+
+def store_test_results_to_csv(test_data, csv_path='results.csv'):
+    # Create a DataFrame from the keys of interest
+    # Example usage:
+    # Assuming `output` is the dictionary returned by one of your methods' .test() call:
+    # output = some_method.test(data_loader)
+    # store_test_results_to_csv(output, 'my_test_results.csv')
+
+    df = pd.DataFrame({
+        'max_probs': test_data['max_probs'],
+        'hum_preds': test_data['hum_preds'],
+        'demographics': test_data['demographics']
+    })
+    
+    # Save the DataFrame to a CSV file
+    df.to_csv(csv_path, index=False)
+    print(f"Data successfully written to {csv_path}")
+
 def main():
 
     # check if there exists directory ../exp_data
@@ -184,6 +204,7 @@ def main():
     # consider changing to NonLinearNet
     stats_combination_cost = []
     stats_combination_all = []
+    stats_combination_fair = []
     for trial in range(max_trials):
 
         # generate data
@@ -224,15 +245,38 @@ def main():
             test_interval=5,
         )
         output = PLC.test(dataset.data_test_loader)
+        # store_test_results_to_csv(output, csv_path='plc_test.csv')
         # sp_metrics = compute_coverage_v_acc_curve( output)
         print('\n\nFairness Metrics for all combination: ')
         stats_combination_all.append(print_metrics(output, class_num=3, combine_method="PL"))
+
+        # fair combination
+        model = LinearNet(dataset.d,4).to(device)
+        PLC = PL_Combine_Fair(model, device)
+        PLC.fit(
+            dataset.data_train_loader,
+            dataset.data_val_loader,
+            dataset.data_test_loader,
+            epochs=total_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
+            verbose=False,
+            test_interval=5,
+        )
+        output = PLC.test(dataset.data_test_loader)
+        # store_test_results_to_csv(output, csv_path='plc_test.csv')
+        # sp_metrics = compute_coverage_v_acc_curve( output)
+        print('\n\nFairness Metrics for all combination: ')
+        stats_combination_fair.append(print_metrics(output, class_num=3, combine_method="PL"))
 
     print('\n\n--Stats of cost optimized unsupervised P+L combiation')
     summarize_metrics(stats_combination_cost)
     print('\n\n--Stats of all combiation')
     summarize_metrics(stats_combination_all)
-    
+    print('\n\n--Stats of fair combiation')
+    summarize_metrics(stats_combination_fair)
+
 
 
 if __name__ == "__main__":
