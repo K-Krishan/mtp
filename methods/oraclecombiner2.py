@@ -11,7 +11,6 @@ import numpy as np
 from torch import nn, optim
 from torch.nn.functional import softmax
 from sklearn.cluster import KMeans
-
 class TSCalibrator():
     """ Maximum likelihood temperature scaling (Guo et al., 2017)
     """
@@ -95,7 +94,7 @@ class TSCalibrator():
         probs /= np.sum(probs, axis=1, keepdims=True)  # Normalize
         return probs
 
-class AllCombiner:
+class OracleCombinerDynamicEOD:
     """ Implements the P+L combination method, fit using maximum likelihood
     """
     def __init__(self, calibration_method='temperature scaling', **kwargs):
@@ -106,16 +105,47 @@ class AllCombiner:
         self.n_train_l = None  # Amount of labeled training data
         self.n_cls = None  # Number of classes
 
+        self.model_eqd = 0.0  # attributes to store EQD
+        self.human_eqd = 0.0
+
         self.eps = 1e-50
 
         self.use_cv = False
         self.calibration_method = calibration_method
         self.calibrator = TSCalibrator()
 
+    def compute_eqd(self, y_true, y_pred, demographics):
+        """Compute Equalized Odds Difference (EQD)."""
+        unique_groups = np.unique(demographics)
+        max_tpr_diff, max_fpr_diff = 0.0, 0.0
+
+        for cls in range(self.n_cls):
+            tprs, fprs = [], []
+            for group in unique_groups:
+                mask = (demographics == group)
+                y_true_cls = (y_true == cls)
+                y_pred_cls = (y_pred == cls)
+
+                tp = np.sum(y_true_cls & y_pred_cls & mask)
+                fn = np.sum(y_true_cls & ~y_pred_cls & mask)
+                fp = np.sum(~y_true_cls & y_pred_cls & mask)
+                tn = np.sum(~y_true_cls & ~y_pred_cls & mask)
+
+                tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+                tprs.append(tpr)
+                fprs.append(fpr)
+
+            max_tpr_diff = max(max_tpr_diff, np.max(tprs) - np.min(tprs))
+            max_fpr_diff = max(max_fpr_diff, np.max(fprs) - np.min(fprs))
+
+        return max_tpr_diff + max_fpr_diff
+
     def calibrate(self, model_probs):
         return self.calibrator.calibrate(model_probs)
 
-    def fit(self, model_probs, y_h, y_true):
+    def fit(self, model_probs, y_h, y_true, demographics):
         self.n_cls = model_probs.shape[1]
 
         # Estimate human confusion matrix
@@ -134,6 +164,14 @@ class AllCombiner:
             self.fit_calibrator_cv(model_probs, y_true)
         else:
             self.fit_calibrator(model_probs, y_true)
+        
+        # Compute calibrated model predictions
+        calibrated_probs = self.calibrate(model_probs)
+        model_preds = np.argmax(calibrated_probs, axis=1)
+
+        # Calculate EQD for model and human
+        self.model_eqd = self.compute_eqd(y_true, model_preds, demographics)
+        self.human_eqd = self.compute_eqd(y_true, y_h, demographics)
 
     def fit_bayesian(self, model_probs, y_h, y_true, alpha=0.1, beta=0.1):
         """ This is the "plus one" parameterization, i.e. alpha,beta just need to be > 0
@@ -177,7 +215,7 @@ class AllCombiner:
         else:
             raise NotImplementedError
 
-    def combine_proba(self, model_probs, y_h, y_true_te):
+    def combine_proba(self, model_probs, y_h, y_true_te, miss_cost = 9, human_cost = 1):
         """ Combines model probabilities with hard labels via the calibrate-confuse equation given the confusion matrix.
 
         Args:
@@ -200,43 +238,54 @@ class AllCombiner:
         human_refered = 0
         model_correct = 0
         model_refered = 0
-        
+
+        defers = np.empty(n_samples)
         y_comb = np.empty((n_samples, self.n_cls))
         for i in range(n_samples):
-
             # P_X = miss_cost * (1 - calibrated_model_probs[i][model_output[i]])
-            # if(True):
+            P_X = miss_cost * (1 - calibrated_model_probs[i][model_output[i]])
+            # if(human_cost <= P_X):
+            if((human_cost + self.model_eqd) < (P_X + self.human_eqd)):
                 # y_comb[i] = calibrated_model_probs[i] * self.confusion_matrix[y_h[i]]
-            y_comb[i] = calibrated_model_probs[i] * self.confusion_matrix[y_h[i]]
-            human_refered += 1
-            if(np.argmax(y_comb[i]) == y_true_te[i]):
-                human_correct += 1
+                y_comb[i] = calibrated_model_probs[i] * self.confusion_matrix[y_h[i]]
+                defers[i] = 1
+                human_refered += 1
+                if(np.argmax(y_comb[i]) == y_true_te[i]):
+                    human_correct += 1
+            else:
+                y_comb[i] = calibrated_model_probs[i]
+                defers[i] = 0
+                model_refered += 1
+                if(np.argmax(y_comb[i]) == y_true_te[i]):
+                    model_correct += 1
 
             if np.allclose(y_comb[i], 0):  # Handle zero rows
                 y_comb[i] = np.ones(self.n_cls) * (1./self.n_cls)
 
         result = {
-            # 'Combined accuracy': (human_correct + model_correct) / n_samples,
-            # 'Human correct': human_correct,
-            # 'Human refered': human_refered,
-            # 'Human accuracy': human_correct / human_refered,
-            # 'Model correct': model_correct,
-            # 'Model refered': model_refered,
-            # 'Model accuracy': model_correct / model_refered,
-            # 'Model cost': miss_cost * (model_refered - model_correct) + human_cost * human_refered
+            'Missclassification Cost' : miss_cost,
+            'Human cost': human_cost,
+            'Combined accuracy': (human_correct + model_correct) / n_samples,
+            'Human correct': human_correct,
+            'Human refered': human_refered,
+            'Human accuracy': human_correct / human_refered if human_refered>0 else 0,
+            'Model correct': model_correct,
+            'Model refered': model_refered,
+            'Model accuracy': model_correct / model_refered if model_refered > 0 else 0,
+            'Model cost': miss_cost * (model_refered - model_correct) + human_cost * human_refered
         }
 
         # Don't forget to normalize :)
         assert np.all(np.isfinite(np.sum(y_comb, axis=1)))
         assert np.all(np.sum(y_comb, axis=1) > 0)
         y_comb /= np.sum(y_comb, axis=1, keepdims=True)
-        return y_comb, result
+        return y_comb, defers, result
         # return calibrated_model_probs, self.confusion_matrix, y_comb
 
-    def combine(self, model_probs, y_h, y_true_te):
+    def combine(self, model_probs, y_h, y_true_te, miss_cost = 9, human_cost = 1):
         """ Combines model probs and y_h to return hard labels
         """
-        y_comb_soft, result = self.combine_proba(model_probs, y_h, y_true_te)
+        y_comb_soft, defers, result = self.combine_proba(model_probs, y_h, y_true_te, miss_cost, human_cost)
         return np.argmax(y_comb_soft, axis=1), result
 
         # calibrated_model_probs, confusion_matrix, y_comb_soft = self.combine_proba(model_probs, y_h)

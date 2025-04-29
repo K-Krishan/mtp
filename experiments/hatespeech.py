@@ -48,6 +48,9 @@ from methods.seperate_thresholds import *
 from methods.costcombination import *
 from methods.combination import *
 from methods.faircomb import *
+from methods.runningEOD import *
+from methods.FairCostCombined import PL_Combine_Fair_Cost
+
 # from networks.cnn import *
 # from networks.cnn import DenseNet121_CE, NetSimple, WideResNet
 
@@ -205,6 +208,8 @@ def main():
     stats_combination_cost = []
     stats_combination_all = []
     stats_combination_fair = []
+    stats_combination_EOD = []
+    stats_combination_fair_cost = []
     for trial in range(max_trials):
 
         # generate data
@@ -252,7 +257,7 @@ def main():
 
         # fair combination
         model = LinearNet(dataset.d,4).to(device)
-        PLC = PL_Combine_Fair(model, device)
+        PLC = PL_Combine_Fair(model, device, k=10, r=0.05)
         PLC.fit(
             dataset.data_train_loader,
             dataset.data_val_loader,
@@ -269,6 +274,47 @@ def main():
         # sp_metrics = compute_coverage_v_acc_curve( output)
         print('\n\nFairness Metrics for all combination: ')
         stats_combination_fair.append(print_metrics(output, class_num=3, combine_method="PL"))
+        
+        # fair combination
+        model = LinearNet(dataset.d,4).to(device)
+        PLC = PL_Combine_Dynamic_EOD(model, device)
+        PLC.fit(
+            dataset.data_train_loader,
+            dataset.data_val_loader,
+            dataset.data_test_loader,
+            epochs=total_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
+            verbose=False,
+            test_interval=5,
+        )
+        output = PLC.test(dataset.data_test_loader)
+        # store_test_results_to_csv(output, csv_path='plc_test.csv')
+        # sp_metrics = compute_coverage_v_acc_curve( output)
+        print('\n\nFairness Metrics with Equalized odds difference considerations: ')
+        stats_combination_EOD.append(print_metrics(output, class_num=3, combine_method="PL"))
+        
+        # fair + cost combination
+        model = LinearNet(dataset.d,4).to(device)
+        PLC = PL_Combine_Fair_Cost(model, device)
+        PLC.fit(
+            dataset.data_train_loader,
+            dataset.data_val_loader,
+            dataset.data_test_loader,
+            epochs=total_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
+            verbose=False,
+            test_interval=5,
+        )
+        output = PLC.test(dataset.data_test_loader)
+        # store_test_results_to_csv(output, csv_path='plc_test.csv')
+        # sp_metrics = compute_coverage_v_acc_curve( output)
+        print('\n\nFairness Metrics with both knnfair & cost optimization: ')
+        stats_combination_fair_cost.append(print_metrics(output, class_num=3, combine_method="PL"))
+        
 
     print('\n\n--Stats of cost optimized unsupervised P+L combiation')
     summarize_metrics(stats_combination_cost)
@@ -276,6 +322,10 @@ def main():
     summarize_metrics(stats_combination_all)
     print('\n\n--Stats of fair combiation')
     summarize_metrics(stats_combination_fair)
+    print('\n\n--Stats of EQD combiation')
+    summarize_metrics(stats_combination_EOD)
+    print('\n\n--Stats of fair+cost combiation')
+    summarize_metrics(stats_combination_fair_cost)
 
 
 

@@ -261,8 +261,13 @@ class HateSpeech(BaseDataset):
         train_y = hatespeech_data["class"].to_numpy()
         train_h = hatespeech_data["human_prediction"].to_numpy()
         train_d = hatespeech_data["demographics"].to_numpy()
-        random_seed = random.randrange(10000)
-        # random_seed = 42 # for consistency during my testing
+        # random_seed = random.randrange(10000)
+        random_seed = 42 # for consistency during my testing
+        
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
 
         logging.info("Embedding texts")
         # TODO: cache the embeddings, so no need to regenerate them

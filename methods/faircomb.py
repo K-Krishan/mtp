@@ -297,7 +297,7 @@ class PL_Combine_Fair(BaseMethod):
                         batch_defers.append(1)
                         # print(f"combined_probs shape: {combined_probs.shape}, index: {i}, y shape: {data_y.shape}")
                         batch_combined_probs.append(combined_probs[i])
-                        batch_combined_preds.append(hum_preds[i])
+                        batch_combined_preds.append(hum_preds[i].cpu().item())
                     else:
                         batch_defers.append(0)
                         batch_combined_probs.append(outputs_np[i])
