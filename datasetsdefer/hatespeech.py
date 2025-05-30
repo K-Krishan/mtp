@@ -278,6 +278,7 @@ class HateSpeech(BaseDataset):
         test_size = int(self.test_split * len(hatespeech_data))
         val_size = int(self.val_split * len(hatespeech_data))
         train_size = len(hatespeech_data) - test_size - val_size
+
         train_y = torch.tensor(train_y)
         train_h = torch.tensor(train_h)
         train_d = torch.tensor(train_d)
@@ -324,14 +325,18 @@ class HateSpeech(BaseDataset):
             test_d.dataset[test_d.indices],
         )
 
+
+        # Use pin_memory=True if using GPU for faster transfers
+        pin_memory = (self.device.type == 'cuda')
+        
         self.data_train_loader = torch.utils.data.DataLoader(
-            data_train, batch_size=self.batch_size, shuffle=False
+            data_train, batch_size=self.batch_size, shuffle=False, pin_memory=pin_memory
         )
         self.data_val_loader = torch.utils.data.DataLoader(
-            data_val, batch_size=self.batch_size, shuffle=False
+            data_val, batch_size=self.batch_size, shuffle=False, pin_memory=pin_memory
         )
         self.data_test_loader = torch.utils.data.DataLoader(
-            data_test, batch_size=self.batch_size, shuffle=False
+            data_test, batch_size=self.batch_size, shuffle=False, pin_memory=pin_memory
         )
 
     def model_setting(self, model_nn):

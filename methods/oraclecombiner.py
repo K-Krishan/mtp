@@ -14,7 +14,7 @@ from sklearn.cluster import KMeans
 class TSCalibrator():
     """ Maximum likelihood temperature scaling (Guo et al., 2017)
     """
-
+    
     def __init__(self, temperature=1., n_clusters=14):
         super().__init__()
         self.temperature = []

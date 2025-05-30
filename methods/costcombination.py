@@ -31,11 +31,13 @@ eps_cst = 1e-8
 class PL_Combine_Cost(BaseMethod):
     """Selective Prediction method, train classifier on all data, and defer based on thresholding classifier confidence (max class prob)"""
 
-    def __init__(self, model_class, device, plotting_interval=100):
+    def __init__(self, model_class, device, miss_cost=9.0, human_cost=1.0, plotting_interval=100):
         self.model_class = model_class
         self.device = device
         self.plotting_interval = plotting_interval
         self.combiner = OracleCombiner()
+        self.miss_cost = miss_cost
+        self.human_cost= human_cost
         # set_seed(42)
 
     def fit_epoch_class(self, dataloader, optimizer, verbose=True, epoch=1):
@@ -180,8 +182,8 @@ class PL_Combine_Cost(BaseMethod):
                 outputs_class = F.softmax(outputs_class, dim=1)
                 max_class_probs, predicted_class = torch.max(outputs_class.data, 1)
                 # print(outputs_class.shape, hum_preds.shape)
-                combined_probs, defers, _ = self.combiner.combine_proba(outputs_class.cpu().numpy(), hum_preds.cpu().numpy(), data_y.cpu().numpy())
-                combined_preds, _ = self.combiner.combine(outputs_class.cpu().numpy(), hum_preds.cpu().numpy(), data_y.cpu().numpy())
+                combined_probs, defers, _ = self.combiner.combine_proba(outputs_class.cpu().numpy(), hum_preds.cpu().numpy(), data_y.cpu().numpy(), miss_cost=self.miss_cost, human_cost=self.human_cost)
+                combined_preds, _ = self.combiner.combine(outputs_class.cpu().numpy(), hum_preds.cpu().numpy(), data_y.cpu().numpy(), miss_cost=self.miss_cost, human_cost=self.human_cost)
                 
                 predictions_all.extend(predicted_class.cpu().numpy())
                 truths_all.extend(data_y.cpu().numpy())

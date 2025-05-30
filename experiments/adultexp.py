@@ -18,6 +18,36 @@ import torch.optim as optim
 import fairlearn.metrics as metrics
 
 logging.basicConfig(level=logging.DEBUG)
+from networks.linear_net import *
+
+logging.basicConfig(level=logging.DEBUG)
+import datetime
+
+import torch.optim as optim
+# from baselines.compare_confidence import *
+# from baselines.differentiable_triage import *
+# from baselines.lce_surrogate import *
+# from baselines.mix_of_exps import *
+# from baselines.one_v_all import *
+# from baselines.selective_prediction import *
+# from datasetsdefer.broward import *
+# from datasetsdefer.chestxray import *
+# from datasetsdefer.cifar_h import *
+# from datasetsdefer.cifar_synth import *
+# from datasetsdefer.generic_dataset import *
+from datasetsdefer.hatespeech import *
+# from datasetsdefer.imagenet_16h import *
+# from datasetsdefer.synthetic_data import *
+# from methods.milpdefer import *
+# from methods.realizable_surrogate import *
+from methods.seperate_thresholds import *
+
+from methods.costcombination import PL_Combine_Cost
+from methods.combination import PL_Combine
+from methods.faircomb import PL_Combine_Fair
+# from methods.runningEOD import *
+# from methods.FairCostCombined import PL_Combine_Fair_Cost
+import pandas as pd
 
 def combine_defer(preds, h_preds, defers):
     return preds * (1 - defers) + h_preds * defers
@@ -120,17 +150,18 @@ def main():
 
     data_dir = '../data'
     
-    max_trials = 5
+    max_trials = 10
     total_epochs = 100
 
     stats_combination_cost = []
     stats_combination_all = []
+    stats_combination_fair = []
     for trial in range(max_trials):
 
         dataset = Adult(data_dir, device)
 
         # model = GradientBoostingClassifier()
-        model = LinearNet(dataset.d,3).to(device)
+        model = LinearNet(dataset.d,4).to(device)
         PLC = PL_Combine_Cost(model, device)
         PLC.fit(
             dataset.data_train_loader,
@@ -145,10 +176,9 @@ def main():
         )
         output = PLC.test(dataset.data_test_loader)
         print('\n\nFairness Metrics for cost optimized combination: ')
-        stats_combination_cost.append(print_metrics(output, class_num=2, combine_method="PL"))
+        stats_combination_cost.append(print_metrics(output, class_num=3, combine_method="PL"))
 
-        # model = GradientBoostingClassifier()
-        model = LinearNet(dataset.d,3).to(device)
+        model = LinearNet(dataset.d,4).to(device)
         PLC = PL_Combine(model, device)
         PLC.fit(
             dataset.data_train_loader,
@@ -163,12 +193,34 @@ def main():
         )
         output = PLC.test(dataset.data_test_loader)
         print('\n\nFairness Metrics for all combination: ')
-        stats_combination_all.append(print_metrics(output, class_num=2, combine_method="PL"))
+        stats_combination_all.append(print_metrics(output, class_num=3, combine_method="PL"))
+
+        model = LinearNet(dataset.d,4).to(device)
+        PLC = PL_Combine_Fair(model, device, fairness_cost=20.0, human_cost=1.0)
+        PLC.fit(
+            dataset.data_train_loader,
+            dataset.data_val_loader,
+            dataset.data_test_loader,
+            epochs=total_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            lr=lr,
+            verbose=False,
+            test_interval=5,
+        )
+        output = PLC.test(dataset.data_test_loader)
+        # store_test_results_to_csv(output, csv_path='plc_test.csv')
+        # sp_metrics = compute_coverage_v_acc_curve( output)
+        print('\n\nFairness Metrics for Fair combination: ')
+        stats_combination_fair.append(print_metrics(output, class_num=3, combine_method="PL"))
+        
 
     print('\n\n--Stats of cost optimized unsupervised P+L combination')
     summarize_metrics(stats_combination_cost)
     print('\n\n--Stats of all combination')
     summarize_metrics(stats_combination_all)
+    print('\n\n--Stats of fair combiation')
+    summarize_metrics(stats_combination_fair)
 
 if __name__ == "__main__":
     main()
